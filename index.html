@@ -58,11 +58,33 @@
         // 3. 컨트롤 (마우스 회전/확대)
         const controls = new OrbitControls(camera, renderer.domElement);
 
-        // 4. 모델 로드 (GLTFLoader)
+        // 4. 모델 로드 부분에 아래 내용을 추가/수정하세요
         const loader = new GLTFLoader();
-        loader.load('3dExport3-v1.glb', (gltf) => {
-            scene.add(gltf.scene);
-            console.log('BIM 모델 로드 완료');
+
+        // --- 진단용 빨간 상자 추가 (모델이 안 보여도 무대 확인용) ---
+        const testBox = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        testBox.position.set(0, 0, 0);
+        scene.add(testBox); 
+        console.log("진단용 빨간 상자가 무대에 배치되었습니다.");
+
+        // 5. 실제 모델 로드
+        loader.load('S_Foundation_MPF3_THK700.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+    
+            // [BIM 매니저 팁] 레빗 모델이 너무 멀리 있을 때 원점으로 강제 소환
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center); // 모델을 (0,0,0)으로 이동
+    
+            console.log('BIM 모델 로드 성공 및 중앙 정렬 완료');
+        }, (xhr) => {
+            console.log((xhr.loaded / xhr.total * 100) + '% 로드 중...');
+        }, (error) => {
+            console.error('모델 로드 실패! 경로를 확인하세요:', error);
         });
 
         // 5. 클릭 이벤트 (Raycaster - 핵심 기능!)
