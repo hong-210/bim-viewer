@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIM 3D 현장 뷰어</title>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #f4f4f4; }
+        model-viewer {
+            width: 100vw;
+            height: 100vh; /* 화면 꽉 차게 설정 */
+            background-color: #eee;
+        }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            pointer-events: none; /* 클릭 방해 금지 */
+        }
+    </style>
+</head>
+<body>
+
+    <model-viewer 
+        src="pump_system.glb" 
+        ar 
+        ar-modes="webxr scene-viewer quick-look" 
+        camera-controls 
+        poster="poster.webp" 
+        shadow-intensity="1" 
+        exposure="1"
+        auto-rotate>
+        
+        <button slot="ar-button" style="background-color: white; border-radius: 4px; border: none; position: absolute; bottom: 16px; right: 16px; padding: 10px;">
+            👋 실제 현장에 배치하기 (AR)
+        </button>
+    </model-viewer>
+
+    <div class="info-panel">
+        <h3>BIM 모델 정보</h3>
+        <p>위치: B1 기계실</p>
+        <p>부재: 급수 펌프 유닛</p>
+    </div>
+
+</body>
+</html>
