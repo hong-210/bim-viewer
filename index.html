@@ -84,30 +84,57 @@
 
         loader.load(MODEL_URL, (gltf) => {
             const model = gltf.scene;
+            
+            // 1. 모델 내부의 모든 재질을 양면 렌더링으로 설정 (안팎이 다 보이게)
+            model.traverse((node) => {
+                if (node.isMesh) {
+                    node.material.side = THREE.DoubleSide; 
+                }
+            });
+        
             scene.add(model);
-
-            // [핵심] 모델의 크기를 측정하여 카메라 위치를 자동으로 잡습니다.
+        
+            // 2. 모델의 크기 측정
             const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-
-            // 모델을 원점(0,0,0)으로 강제 이동
+            const center = box.getCenter(new THREE.Vector3());
+        
+            // 3. 모델을 원점으로 이동
             model.position.x += (model.position.x - center.x);
             model.position.y += (model.position.y - center.y);
             model.position.z += (model.position.z - center.z);
-
-            // 모델 크기에 비례하여 카메라 거리 조절
+        
+            // 4. 모델이 너무 크면(mm 단위 등) 강제로 축소
             const maxDim = Math.max(size.x, size.y, size.z);
-            const cameraZ = maxDim * 1.5; 
+            if (maxDim > 1000) { // 모델이 1000미터 이상이라면 mm단위로 간주
+                model.scale.setScalar(1 / 1000);
+            }
+        
+            // 5. 카메라 위치를 모델 크기에 맞춰 재설정
+            const fitOffset = 2;
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * fitOffset;
+            
+            // 만약 축소했다면 카메라 거리도 조절
+            if (maxDim > 1000) cameraZ /= 1000;
+        
             camera.position.set(cameraZ, cameraZ, cameraZ);
             camera.lookAt(0, 0, 0);
-            
             controls.target.set(0, 0, 0);
             controls.update();
-
+        
             document.getElementById('loader-status').style.display = 'none';
-            console.log("BIM 모델 중앙 정렬 완료");
-        }, 
+            console.log("최종 정렬 완료. 크기:", maxDim);
+        });
+
+        // 바닥에 격자무늬 깔기 (이게 보이면 화면은 정상입니다)
+        const gridHelper = new THREE.GridHelper(100, 100);
+        scene.add(gridHelper);
+        
+        // 좌표축 표시 (빨강:X, 초록:Y, 파랑:Z)
+        const axesHelper = new THREE.AxesHelper(10);
+        scene.add(axesHelper);
+        
         (xhr) => {
             const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
             document.getElementById('loader-status').innerText = `모델 다운로드 중: ${percent}%`;
