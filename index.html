@@ -3,27 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D BIM Viewer</title>
+    <title>BIM 3D Interactive Viewer</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: 'Malgun Gothic', sans-serif; }
         #container { width: 100vw; height: 100vh; }
-        #ui-layer {
+        
+        /* 상단 정보 패널 */
+        #ui-panel {
             position: absolute; top: 20px; left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px; border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            pointer-events: none;
-            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px; border-radius: 12px; width: 280px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            z-index: 100; border: 1px solid #ddd;
         }
-        .status { color: #d32f2f; font-weight: bold; }
+        h3 { margin: 0 0 10px 0; color: #333; font-size: 18px; }
+        .info-item { margin-bottom: 8px; font-size: 14px; color: #555; }
+        .label { font-weight: bold; color: #0078d4; }
+        
+        /* 로딩 바 */
+        #loader-status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 100;
+        }
     </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <h3>BIM 3D 뷰어 (Three.js)</h3>
-        <p id="info">설정을 로드 중...</p>
-        <div id="error-log" class="status"></div>
+    <div id="ui-panel">
+        <h3>BIM 부재 정보</h3>
+        <div id="prop-display">
+            <div class="info-item">부재를 클릭하여 상세 정보를 확인하세요.</div>
+        </div>
     </div>
+    <div id="loader-status">모델 로딩 대기 중...</div>
     <div id="container"></div>
 
     <script type="importmap">
@@ -40,74 +52,111 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // 1. 장면 및 카메라 설정
+        // 1. 기본 씬 설정
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xeeeeee);
+        scene.background = new THREE.Color(0xf5f5f5);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
-        camera.position.set(10, 10, 10);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
         document.getElementById('container').appendChild(renderer.domElement);
 
-        // 2. 조명 (모델이 어둡게 나오지 않도록)
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+        // 2. 조명 설정 (BIM 모델이 입체적으로 보이게)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-        sunLight.position.set(10, 20, 10);
-        scene.add(sunLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
 
-        // 3. 컨트롤 (마우스 조작)
+        // 3. 컨트롤러
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
 
-        // 4. 로딩 확인용 빨간 박스 (엔진 작동 시 바로 나타남)
-        const testBox = new THREE.Mesh(
-            new THREE.BoxGeometry(1, 1, 1),
-            new THREE.MeshBasicMaterial({ color: 0xff0000 })
-        );
-        scene.add(testBox);
-
-        // 5. 모델 로드 (가장 중요한 부분)
+        // 4. 모델 로더 및 중앙 정렬 로직
         const loader = new GLTFLoader();
         
-        // ★ 파일명을 실제 GitHub에 올린 이름과 대소문자까지 똑같이 맞춰주세요.
-        const MODEL_FILE = '3dExport3-v1.glb'; 
+        // ★ 실제 파일명으로 수정 (대소문자 주의)
+        const MODEL_URL = '3dExport3-v1.glb'; 
 
-        loader.load(MODEL_FILE, (gltf) => {
+        loader.load(MODEL_URL, (gltf) => {
             const model = gltf.scene;
+            scene.add(model);
 
-            // BIM 모델의 큰 좌표를 (0,0,0)으로 강제 이동시키는 로직
+            // [핵심] 모델의 크기를 측정하여 카메라 위치를 자동으로 잡습니다.
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
 
-            model.position.sub(center); 
-            scene.add(model);
+            // 모델을 원점(0,0,0)으로 강제 이동
+            model.position.x += (model.position.x - center.x);
+            model.position.y += (model.position.y - center.y);
+            model.position.z += (model.position.z - center.z);
 
-            // 카메라 위치 자동 조정 (모델 크기에 맞춰서)
+            // 모델 크기에 비례하여 카메라 거리 조절
             const maxDim = Math.max(size.x, size.y, size.z);
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= 1.5; // 약간의 여유 공간
+            const cameraZ = maxDim * 1.5; 
             camera.position.set(cameraZ, cameraZ, cameraZ);
             camera.lookAt(0, 0, 0);
+            
             controls.target.set(0, 0, 0);
+            controls.update();
 
-            document.getElementById('info').innerText = "로드 성공: " + MODEL_FILE;
-            scene.remove(testBox); // 모델 로드 성공 시 빨간 박스 삭제
+            document.getElementById('loader-status').style.display = 'none';
+            console.log("BIM 모델 중앙 정렬 완료");
         }, 
         (xhr) => {
-            const progress = (xhr.loaded / xhr.total * 100).toFixed(0);
-            document.getElementById('info').innerText = `다운로드 중: ${progress}%`;
+            const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+            document.getElementById('loader-status').innerText = `모델 다운로드 중: ${percent}%`;
         }, 
-        (error) => {
-            console.error(error);
-            document.getElementById('error-log').innerText = "에러: 파일을 찾을 수 없습니다. (파일명/경로 확인)";
+        (err) => {
+            console.error(err);
+            document.getElementById('loader-status').innerText = "파일을 찾을 수 없습니다.";
         });
 
+        // 5. 클릭(Raycaster) 이벤트
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            // 마우스 좌표를 -1 ~ 1 사이로 변환
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                const name = obj.name || "이름 없는 부재";
+                
+                // 이름 분석 (예: S_Foundation_MPF3_THK700)
+                const parts = name.split('_');
+                
+                let infoHTML = `<div class="info-item"><span class="label">전체 이름:</span> ${name}</div>`;
+                if(parts.length > 1) {
+                    infoHTML += `
+                        <div class="info-item"><span class="label">카테고리:</span> ${parts[1] || '-'}</div>
+                        <div class="info-item"><span class="label">타입:</span> ${parts[2] || '-'}</div>
+                        <div class="info-item"><span class="label">규격:</span> ${parts[3] || '-'}</div>
+                    `;
+                }
+                
+                document.getElementById('prop-display').innerHTML = infoHTML;
+
+                // 선택된 부재 강조 (잠시 반짝이게)
+                if (obj.material && obj.material.emissive) {
+                    const originalColor = obj.material.emissive.getHex();
+                    obj.material.emissive.setHex(0x333300);
+                    setTimeout(() => obj.material.emissive.setHex(originalColor), 500);
+                }
+            }
+        });
+
+        // 6. 루프 및 리사이즈
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
